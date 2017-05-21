@@ -9,6 +9,7 @@ using Npoi.Core.HSSF.UserModel;
 using System.IO;
 using System.Collections;
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 
 namespace STU.SignalsChecker
@@ -45,7 +46,7 @@ namespace STU.SignalsChecker
         ///misc: only "CH_NAME" and "EXPRESSION" has  property
         ///examples "NA", "CH_NAME"%"AA", "EXPRESSION"%"AA||BB"
         /// </param>
-        public Signal(String name, String instanceDef = "INS", String io = "I", int width_start=0, int width_end=39, String Con="")
+        public Signal(String name, String instanceDef = "INS", String io = "I", int width_start=0, int width_end=39, String Con="", String misc = "")
         {
             this.name = name;
             this.instanceDef = instanceDef;
@@ -59,7 +60,7 @@ namespace STU.SignalsChecker
             }
             this.width.start = width_start;
             this.width.end = width_end;
-            switch(Con.Split('%')[0].ToUpper())
+            switch(Con)
             {
                 case "NA":
                 case "":
@@ -83,7 +84,7 @@ namespace STU.SignalsChecker
             }
             if(this.connect == Con_e.CH_NAME || this.connect == Con_e.EXPRESSION)
             {
-                this.misc = Con.Split('%')[1];
+                this.misc = misc;
             }
             
         }
@@ -150,6 +151,10 @@ namespace STU.SignalsChecker
 
         }
 
+        public void DumpXml()
+        {
+            
+        }
     }
 
 
@@ -158,9 +163,18 @@ namespace STU.SignalsChecker
         private ISheet sheet;
         private ILogger log;
         private IList<Signal> sigList;
+        public IList<Signal> SigList
+        {
+           get
+           {
+               return sigList;
+           }
+        }
         public SignalsChecker(ISheet sheet, ILogger log)
         {
            this.sheet = sheet;
+           this.log = log;
+           this.sigList = new List<Signal>();
         }
 
         /// <summary>
@@ -173,20 +187,28 @@ namespace STU.SignalsChecker
             if(titileRow.LastCellNum < 3)
             {
                 log.LogError("Table column number error");
-                log.LogError("there are three columns: SignalName|IO|Connection");
+                log.LogError("there are three columns: SignalName|instance|IO|Connection");
                 return 1;
             }
             foreach(var cell in titileRow.Cells)
             {
                 switch(cell.ColumnIndex)
                 {
-                    case 1:
+                    case 0:
                         if(cell.CellType != CellType.String && cell.StringCellValue != "SignalName")
                         {
                            log.LogError("The first column of the title line must be SignalName");
                            return 1; 
                         }
                         break;
+                    case 1:
+                        if(cell.CellType != CellType.String && cell.StringCellValue != "Instance")
+                        {
+                            log.LogError("The second column of the title line must be Instance");
+                            return 1;
+                        }
+                        break;
+
                     case 2:
                         if(cell.CellType != CellType.String && cell.StringCellValue != "IO")
                         {
@@ -214,6 +236,93 @@ namespace STU.SignalsChecker
            }
            return 0;
         }
+
+        /// <summary>
+        /// check empty line in worksheet 
+        /// </summary>
+        /// <param name="row">row in tbale</param>
+        /// <returns>1 is empty line</returns>
+        private bool EmptyLineCheck(IRow row)
+        {
+            bool isEmpty = true;
+            foreach(var cell in row.Cells)
+            {
+                if(cell.CellType != CellType.Blank)
+                {
+                    isEmpty = false;
+                    break;
+                }
+            } 
+            return isEmpty;
+        }
+
+        /// <summary>
+        /// normal row check, check every cell for the row
+        /// </summary>
+        /// <param name="row"></param>
+        /// <returns> the Signal object if success, null if failed</returns>
+        private Signal NormalRowCheck(IRow row)
+        {
+            String name = "", insRef = "INS", io = "", con = "", misc = "";
+            int start = 0, end = 0;
+            ICell cell;
+
+            cell = row.GetCell(0);
+            if(SignalNameCellCheck(cell, ref name, ref end, ref start) == 1)
+            {
+                log.LogError("SignalName Cell Format Error");
+                return null;
+            }
+            cell = row.GetCell(1);
+            insRef = cell.CellType == CellType.Blank ? "INS" : cell.StringCellValue;
+            cell = row.GetCell(2);
+            io = cell.CellType == CellType.Blank ? "I": cell.StringCellValue;
+            cell = row.GetCell(3);
+            if(ConncetionCellCheck(cell, ref con, ref misc) == 1)
+            {
+                log.LogError("Connection Cell Format Error");
+                return null;
+            }
+            return new Signal(name, insRef, io, start, end, con, misc);
+        }
+
+        /// <summary>
+        /// check the signal name cell content
+        /// the content contain the the signal name and signal width 
+        /// the type is signalnameEndnum~startnum, example is address35~4
+        /// </summary>
+        /// <param name="cell"></param>
+        /// <param name="name">signal name</param>
+        /// <param name="width_end">signal width </param>
+        /// <param name="width_start">signal width</param>
+        /// <returns>0 is ok</returns>
+        private int SignalNameCellCheck(ICell cell, ref String name, ref int width_end, ref int width_start)
+        {
+            String content = cell.StringCellValue;
+            Regex re = new Regex(@"(\w+)((\d{1,2})~(\d{1,2})?");
+
+            Match m = re.Match(content);
+            if(!m.Success)
+            {
+               log.LogError(String.Format("Row {0:d} Signal Name cell content format Error", cell.Row.RowNum)); 
+               log.LogError("Signal Name content format is:"); 
+               log.LogError("single bit signal only need signal name"); 
+               log.LogError("multi-bits signal need signamewidth_end~width_start, just like address35~4"); 
+               return 1;
+            }
+            else
+            {
+                name = m.Groups[0].Captures[0].Value;
+                if(m.Groups.Count == 4) 
+                {
+                    width_end = Convert.ToInt32(m.Groups[2].Captures[0].Value);
+                    width_start = Convert.ToInt32(m.Groups[3].Captures[0].Value);
+                }
+                return 0;
+            }
+
+        }
+
         /// <summary>
         /// check the connection cell content
         /// the format of the connect cell is Type%Misc 
@@ -225,7 +334,7 @@ namespace STU.SignalsChecker
         /// <param name="cell">Conncetion cell</param>
         /// <param name="connect">Conncetion Type</param>
         /// <param name="misc">Conncetion misc</param>
-        /// <returns></returns>
+        /// <returns>0 is ok</returns>
         private int ConncetionCellCheck(ICell cell, ref String con, ref String misc)
         {
             String []sArray = cell.StringCellValue.Split('%');
@@ -262,12 +371,47 @@ namespace STU.SignalsChecker
         /// <summary>
         ///Check the excel table format
         ///1. check the title line 
-        ///2. check the connection String  
+        ///2. check the empty line
+        ///3. check the normal row
         /// </summary>
         /// <returns>return 0 is ok</returns>
         public int Check()
         {
-            foreach(var row in sheet.) 
+            String sigName;
+            String insRef;
+            String io;
+            int width_start, width_end;
+            String con;
+            String misc;
+
+
+            //check title line
+            if(TitleLineCheck(sheet.GetRow(0)) != 0)
+            {
+               log.LogError("Title Line Format ERROR"); 
+               return 1;
+            }
+
+            foreach(var row in sheet)
+            {
+               IRow tmpRow = row as IRow;
+               if(tmpRow.RowNum == 0)
+               {
+                   continue;
+               }
+               if(EmptyLineCheck(tmpRow)) 
+               {
+                    log.LogInformation("Ignore empty row");
+               }
+               else
+               {
+                    Signal sig = NormalRowCheck(tmpRow);
+                    if(sig != null)
+                    {
+                        sigList.Add(sig);
+                    }
+               }
+            } 
             return 0;
         }
 
