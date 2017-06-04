@@ -1,8 +1,0 @@
-D:\project\csharp\SignalsChecker\bin\Debug\netcoreapp1.1\SignalsChecker.deps.json
-D:\project\csharp\SignalsChecker\bin\Debug\netcoreapp1.1\SignalsChecker.runtimeconfig.json
-D:\project\csharp\SignalsChecker\bin\Debug\netcoreapp1.1\SignalsChecker.runtimeconfig.dev.json
-D:\project\csharp\SignalsChecker\bin\Debug\netcoreapp1.1\SignalsChecker.dll
-D:\project\csharp\SignalsChecker\bin\Debug\netcoreapp1.1\SignalsChecker.pdb
-D:\project\csharp\SignalsChecker\obj\Debug\netcoreapp1.1\SignalsChecker.AssemblyInfo.cs
-D:\project\csharp\SignalsChecker\obj\Debug\netcoreapp1.1\SignalsChecker.dll
-D:\project\csharp\SignalsChecker\obj\Debug\netcoreapp1.1\SignalsChecker.pdb
