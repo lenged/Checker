@@ -25,11 +25,11 @@ namespace STU.SignalsChecker
         /// <summary>
         /// dumpt to json file 
         /// </summary>
-        public void DumpJson()
+        public void DumpJson(JsonWriter writer)
         {
             foreach(var sig in sigList)
             {
-                sig.DumpJson();
+                sig.DumpJson(writer);
             }
         }
 
@@ -86,7 +86,7 @@ namespace STU.SignalsChecker
         {
             foreach(var If in ifList)
             {
-                If.DumpJson();
+                If.DumpJson(writer);
             }
         }
 

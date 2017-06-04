@@ -20,7 +20,7 @@ namespace STU.SignalsChecker
        public int start;
        public int end; 
     }
-     class Signal
+    public class Signal
     {
         enum Con_e {DEFAULT, CH_NAME, ONE, ZERO, EXPRESSION};
         enum IO_e {INPUT, OUTPUT}
@@ -30,45 +30,6 @@ namespace STU.SignalsChecker
         SignalWidth _width;
         Con_e _connect;
         String _misc; //for CH_NAME and EXPRESSION Con_e
-
-        public String Name
-        {
-            get
-            {
-                return _name;
-            }
-        }
-
-        public String Width
-        {
-            get
-            {
-                return String.Format("{0:d}", (_width.end+1));
-            }
-        }
-        public String InstanceDef
-        {
-            get
-            {
-                return _instanceDef;
-            }
-        }
-
-        public String IO
-        {
-            get
-            {
-                return _io.ToString();
-            }
-        }
-
-        public String Connection
-        {
-            get
-            {
-                return GenConnection();
-            }
-        }
 
         public Signal() {}
 
@@ -152,7 +113,7 @@ namespace STU.SignalsChecker
             {
                 ret += String.Format("{0:d}'d0", width.start);
             }
-            ret += "};";
+            ret += "}";
             return ret;
 
         }
@@ -186,9 +147,20 @@ namespace STU.SignalsChecker
             return "";
         }
 
-        public void DumpJson()
+        public void DumpJson(JsonWriter writer)
         {
-
+            writer.WriteStartObject();
+            writer.WritePropertyName("Name");
+            writer.WriteValue(this._name);
+            writer.WritePropertyName("IO");
+            writer.WriteValue(this._io.ToString());
+            writer.WritePropertyName("InstanceDef");
+            writer.WriteValue(this._instanceDef);
+            writer.WritePropertyName("Width");
+            writer.WriteValue(String.Format("{0:d}", (this._width.end+1)));
+            writer.WritePropertyName("Connection");
+            writer.WriteValue(this.JoinSignalWithWidth(_width, _instanceDef, _name));
+            writer.WriteEndObject();
         }
 
         public void DumpXml()
@@ -198,7 +170,7 @@ namespace STU.SignalsChecker
     }
 
 
-    class SignalsChecker: IChecker
+    public class SignalsChecker: IChecker
     {
         private ISheet sheet;
         private ILogger log;
@@ -460,7 +432,10 @@ namespace STU.SignalsChecker
 
         private void DumpJson()
         {
-
+            foreach(var sig in sigList)
+            {
+                sig.DumpJson(writer);
+            }
         }
         private void DumpXml()
         {
