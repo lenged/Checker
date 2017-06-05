@@ -7,6 +7,7 @@ using Npoi.Core.SS.UserModel;
 using Npoi.Core.HSSF.UserModel;
 using Npoi.Core.XSSF.UserModel;
 using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
 
 namespace STU.SignalsChecker
 {
@@ -24,11 +25,11 @@ namespace STU.SignalsChecker
         /// <summary>
         /// dumpt to json file 
         /// </summary>
-        public void DumpJson()
+        public void DumpJson(JsonWriter writer)
         {
             foreach(var sig in sigList)
             {
-                sig.DumpJson();
+                sig.DumpJson(writer);
             }
         }
 
@@ -45,12 +46,14 @@ namespace STU.SignalsChecker
     {
         private IWorkbook wb;
         private ILogger log;
+        private JsonWriter writer;
         private IList<IF> ifList;
 
-        public IFChecker(IWorkbook wb, ILogger log)
+        public IFChecker(IWorkbook wb, ILogger log, JsonWriter writer)
         {
             this.wb = wb;
             this.log = log;
+            this.writer = writer;
             ifList = new List<IF>();
         }
         public int Check()
@@ -65,10 +68,10 @@ namespace STU.SignalsChecker
                     log.LogWarning("No Sheet in workbook");
                     continue;
                 }
-                checker = new SignalsChecker(tmpSheet, log);
+                checker = new SignalsChecker(tmpSheet, log, writer);
                 if(checker.Check() == 1)
                 {
-                    log.LogError(String.Format("The {0:s} Worksheet in Workbook can pass check", tmpSheet.SheetName))
+                    log.LogError(String.Format("The {0:s} Worksheet in Workbook can pass check", tmpSheet.SheetName));
                     return 1;
                 }
                 else
@@ -83,7 +86,7 @@ namespace STU.SignalsChecker
         {
             foreach(var If in ifList)
             {
-                If.DumpJson();
+                If.DumpJson(writer);
             }
         }
 

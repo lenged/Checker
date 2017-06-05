@@ -11,6 +11,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
 
 namespace STU.SignalsChecker
 {
@@ -19,16 +20,16 @@ namespace STU.SignalsChecker
        public int start;
        public int end; 
     }
-     class Signal
+    public class Signal
     {
         enum Con_e {DEFAULT, CH_NAME, ONE, ZERO, EXPRESSION};
         enum IO_e {INPUT, OUTPUT}
-        string name;
-        string instanceDef;
-        IO_e io;
-        SignalWidth width;
-        Con_e connect;
-        String misc; //for CH_NAME and EXPRESSION Con_e
+        string _name;
+        string _instanceDef;
+        IO_e _io;
+        SignalWidth _width;
+        Con_e _connect;
+        String _misc; //for CH_NAME and EXPRESSION Con_e
 
         public Signal() {}
 
@@ -48,43 +49,43 @@ namespace STU.SignalsChecker
         /// </param>
         public Signal(String name, String instanceDef = "INS", String io = "I", int width_start=0, int width_end=39, String Con="", String misc = "")
         {
-            this.name = name;
-            this.instanceDef = instanceDef;
+            this._name = name;
+            this._instanceDef = instanceDef;
             if(io == "I")
             {
-                this.io = IO_e.INPUT;
+                this._io = IO_e.INPUT;
             }
             else
             {
-                this.io = IO_e.OUTPUT;
+                this._io = IO_e.OUTPUT;
             }
-            this.width.start = width_start;
-            this.width.end = width_end;
+            this._width.start = width_start;
+            this._width.end = width_end;
             switch(Con)
             {
                 case "NA":
                 case "":
-                    this.connect = Con_e.DEFAULT;
+                    this._connect = Con_e.DEFAULT;
                     break;
                 case "CH_NAME":
-                    this.connect = Con_e.CH_NAME;
+                    this._connect = Con_e.CH_NAME;
                     break;
                 case "ZERO":
-                    this.connect = Con_e.ZERO;
+                    this._connect = Con_e.ZERO;
                     break;
                 case "ONE":
-                    this.connect = Con_e.ONE;
+                    this._connect = Con_e.ONE;
                     break;
                 case "EXPRESSION":
-                    this.connect = Con_e.EXPRESSION;
+                    this._connect = Con_e.EXPRESSION;
                     break;
                 default:
-                    this.connect = Con_e.DEFAULT;
+                    this._connect = Con_e.DEFAULT;
                     break;
             }
-            if(this.connect == Con_e.CH_NAME || this.connect == Con_e.EXPRESSION)
+            if(this._connect == Con_e.CH_NAME || this._connect == Con_e.EXPRESSION)
             {
-                this.misc = misc;
+                this._misc = misc;
             }
             
         }
@@ -112,7 +113,7 @@ namespace STU.SignalsChecker
             {
                 ret += String.Format("{0:d}'d0", width.start);
             }
-            ret += "};";
+            ret += "}";
             return ret;
 
         }
@@ -123,22 +124,22 @@ namespace STU.SignalsChecker
         private String GenConnection()
         {
             String ret;
-            switch(connect)
+            switch(_connect)
             {
                 case Con_e.DEFAULT: //empty or NA in table
-                    ret = JoinSignalWithWidth(width, instanceDef, name);
+                    ret = JoinSignalWithWidth(_width, _instanceDef, _name);
                     return ret;
                 case Con_e.CH_NAME: 
-                    ret = JoinSignalWithWidth(width, instanceDef, misc);
+                    ret = JoinSignalWithWidth(_width, _instanceDef, _misc);
                     return ret;
                 case Con_e.ONE:
-                    ret = String.Format("'h{0:x}", Math.Pow(2, width.end+1)-1);
+                    ret = String.Format("'h{0:x}", Math.Pow(2, _width.end+1)-1);
                     return ret;
                 case Con_e.ZERO:
                     ret = String.Format("'h0");
                     return ret;
                 case Con_e.EXPRESSION:
-                    ret = misc;
+                    ret = _misc;
                     return ret;
                 defaut:
                     return "";
@@ -146,22 +147,35 @@ namespace STU.SignalsChecker
             return "";
         }
 
-        public void DumpJson()
+        public void DumpJson(JsonWriter writer)
         {
-
+            writer.WriteStartObject();
+            writer.WritePropertyName("Name");
+            writer.WriteValue(this._name);
+            writer.WritePropertyName("IO");
+            writer.WriteValue(this._io.ToString());
+            writer.WritePropertyName("InstanceDef");
+            writer.WriteValue(this._instanceDef);
+            writer.WritePropertyName("Width");
+            writer.WriteValue(String.Format("{0:d}", (this._width.end+1)));
+            writer.WritePropertyName("Connection");
+            writer.WriteValue(this.JoinSignalWithWidth(_width, _instanceDef, _name));
+            writer.WriteEndObject();
         }
 
         public void DumpXml()
         {
-            
+
         }
     }
 
 
-    class SignalsChecker: IChecker
+    public class SignalsChecker: IChecker
     {
         private ISheet sheet;
         private ILogger log;
+
+        private JsonWriter writer;
         private IList<Signal> sigList;
         public IList<Signal> SigList
         {
@@ -170,10 +184,11 @@ namespace STU.SignalsChecker
                return sigList;
            }
         }
-        public SignalsChecker(ISheet sheet, ILogger log)
+        public SignalsChecker(ISheet sheet, ILogger log, JsonWriter writer)
         {
            this.sheet = sheet;
            this.log = log;
+           this.writer = writer;
            this.sigList = new List<Signal>();
         }
 
@@ -417,7 +432,10 @@ namespace STU.SignalsChecker
 
         private void DumpJson()
         {
-
+            foreach(var sig in sigList)
+            {
+                sig.DumpJson(writer);
+            }
         }
         private void DumpXml()
         {
