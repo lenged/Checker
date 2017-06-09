@@ -133,7 +133,7 @@ namespace STU.SignalsChecker
                     ret = JoinSignalWithWidth(_width, _instanceDef, _misc);
                     return ret;
                 case Con_e.ONE:
-                    ret = String.Format("'h{0:x}", Math.Pow(2, _width.end+1)-1);
+                    ret = String.Format("{0:d}'h{1:x}", _width.end+1, Math.Pow(2, _width.end+1)-1);
                     return ret;
                 case Con_e.ZERO:
                     ret = String.Format("'h0");
@@ -145,6 +145,12 @@ namespace STU.SignalsChecker
                     return "";
             }
             return "";
+        }
+
+
+        public override String ToString()
+        {
+            return String.Format("Name: {0}, Instance: {1}, IO: {2}, width-start {3:d} -- end {4:d}, con: {5}", _name, _instanceDef, _io, _width.start, _width.end, _connect);
         }
 
         public void DumpJson(JsonWriter writer)
@@ -202,7 +208,7 @@ namespace STU.SignalsChecker
             if(titileRow.LastCellNum < 3)
             {
                 log.LogError("Table column number error");
-                log.LogError("there are three columns: SignalName|instance|IO|Connection");
+                log.LogError("there are three columns: SignalName|Instance|IO|Connection");
                 return 1;
             }
             foreach(var cell in titileRow.Cells)
@@ -314,7 +320,7 @@ namespace STU.SignalsChecker
         private int SignalNameCellCheck(ICell cell, ref String name, ref int width_end, ref int width_start)
         {
             String content = cell.StringCellValue;
-            Regex re = new Regex(@"(\w+)((\d{1,2})~(\d{1,2})?");
+            Regex re = new Regex(@"(\w+)((\d{1,2})~(\d{1,2})){0,1}");
 
             Match m = re.Match(content);
             if(!m.Success)
@@ -327,16 +333,21 @@ namespace STU.SignalsChecker
             }
             else
             {
-                name = m.Groups[0].Captures[0].Value;
-                if(m.Groups.Count == 4) 
+                Console.WriteLine("Groups  {0:d} vs content {1:d}", m.Groups[0].Captures[0], content);
+                name = m.Groups[1].Captures[0].Value;
+                if(m.Groups[3].Captures.Count > 0)
                 {
-                    width_end = Convert.ToInt32(m.Groups[2].Captures[0].Value);
-                    width_start = Convert.ToInt32(m.Groups[3].Captures[0].Value);
+                    width_end = Convert.ToInt32(m.Groups[3].Captures[0].Value);
+                }
+                if(m.Groups[4].Captures.Count > 0)
+                {
+                    width_start = Convert.ToInt32(m.Groups[4].Captures[0].Value);
                 }
                 return 0;
             }
 
         }
+
 
         /// <summary>
         /// check the connection cell content
@@ -432,11 +443,14 @@ namespace STU.SignalsChecker
 
         private void DumpJson()
         {
+            writer.WriteStartArray();
             foreach(var sig in sigList)
             {
                 sig.DumpJson(writer);
             }
+            writer.WriteEndArray();
         }
+
         private void DumpXml()
         {
 

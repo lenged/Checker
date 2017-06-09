@@ -16,10 +16,12 @@ namespace STU.SignalsChecker
     /// </summary>
     class IF
     {
-        IList<Signal> sigList;
-        public IF(IList<Signal> sigList) 
+        IList<Signal> _sigList;
+        String _name;
+        public IF(IList<Signal> sigList, String name) 
         {
-            this.sigList = sigList;
+            this._sigList = sigList;
+            this._name = name;
         }
 
         /// <summary>
@@ -27,10 +29,14 @@ namespace STU.SignalsChecker
         /// </summary>
         public void DumpJson(JsonWriter writer)
         {
-            foreach(var sig in sigList)
+            writer.WriteStartObject();
+            writer.WriteStartArray();
+            foreach(var sig in _sigList)
             {
                 sig.DumpJson(writer);
             }
+            writer.WriteEndArray();
+            writer.WriteEndObject();
         }
 
         public void DumpXml()
@@ -76,7 +82,7 @@ namespace STU.SignalsChecker
                 }
                 else
                 {
-                    ifList.Add(new IF((checker as SignalsChecker).SigList));
+                    ifList.Add(new IF((checker as SignalsChecker).SigList, tmpSheet.SheetName));
                 }
            }
            return 0; 
@@ -84,10 +90,12 @@ namespace STU.SignalsChecker
         
         private void DumpJson()
         {
+            writer.WriteStartArray();
             foreach(var If in ifList)
             {
                 If.DumpJson(writer);
             }
+            writer.WriteEndArray();
         }
 
         private void DumpXml()

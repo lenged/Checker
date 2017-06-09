@@ -15,7 +15,6 @@ namespace STU.SignalsChecker
     {
         static void Main(string[] args)
         {
-           StringBuilder 
         }
     }
 }
