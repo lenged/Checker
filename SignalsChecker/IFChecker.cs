@@ -14,7 +14,7 @@ namespace STU.SignalsChecker
     /// <summary>
     /// systemverilog interface 
     /// </summary>
-    class IF
+    public class IF
     {
         IList<Signal> _sigList;
         String _name;
@@ -24,12 +24,51 @@ namespace STU.SignalsChecker
             this._name = name;
         }
 
+        public override bool Equals(object obj)
+        {
+            IF rsh;
+            bool flag = true;
+            rsh = obj as IF;
+            if(rsh == null)
+            {
+                return false;
+            }
+            if(this._sigList.Count != rsh._sigList.Count)
+            {
+                flag = false;
+            }
+            for(int i = 0; i < _sigList.Count; i++)
+            {
+                if(_sigList[i].Equals(rsh._sigList[i]) == false)
+                {
+                    flag = false;
+                    break;
+                }
+            }
+            return (_name == rsh._name) && flag;
+        }
+
+        public override String ToString()
+        {
+           String str = ""; 
+           str += String.Format("[IF name {0}]\n", _name);
+           foreach(var sig in _sigList)
+           {
+               str += sig.ToString();
+           }
+           return str;
+
+        }
+
         /// <summary>
         /// dumpt to json file 
         /// </summary>
         public void DumpJson(JsonWriter writer)
         {
             writer.WriteStartObject();
+            writer.WritePropertyName("Name");
+            writer.WriteValue(_name);
+            writer.WritePropertyName("SigList");
             writer.WriteStartArray();
             foreach(var sig in _sigList)
             {
@@ -48,12 +87,20 @@ namespace STU.SignalsChecker
     /// <summary>
     /// sv Interface Checker
     /// </summary>
-    class IFChecker: IChecker
+    public class IFChecker: IChecker
     {
         private IWorkbook wb;
         private ILogger log;
         private JsonWriter writer;
         private IList<IF> ifList;
+
+        public IList<IF> IfList
+        {
+            get
+            {
+                return this.ifList;
+            }
+        }
 
         public IFChecker(IWorkbook wb, ILogger log, JsonWriter writer)
         {
@@ -72,6 +119,11 @@ namespace STU.SignalsChecker
                 if(tmpSheet == null)
                 {
                     log.LogWarning("No Sheet in workbook");
+                    continue;
+                }
+                if(tmpSheet.GetRow(0) == null)
+                {
+                    log.LogWarning("Ignore Empty Sheet");
                     continue;
                 }
                 checker = new SignalsChecker(tmpSheet, log, writer);
