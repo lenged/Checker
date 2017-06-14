@@ -1,4 +1,6 @@
-namespace ZX.Checker
+using System.Collections.Generic;
+
+namespace STU.Checker
 {
     public enum Dump_e {TXT, JSON, XML};
     public interface IChecker
@@ -6,8 +8,10 @@ namespace ZX.Checker
         /// <summary>
         /// check the execl file and read the content to memory
         /// </summary>
+        /// <param name = "list">the memory content list</param>
         /// <returns>return 0 if check ok</returns>
         int Check();
+
 
         /// <summary>
         ///  dump the memory content to file
