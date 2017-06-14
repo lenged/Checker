@@ -14,23 +14,68 @@ namespace STU.SignalsChecker
     /// <summary>
     /// systemverilog interface 
     /// </summary>
-    class IF
+    public class IF
     {
-        IList<Signal> sigList;
-        public IF(IList<Signal> sigList) 
+        IList<Signal> _sigList;
+        String _name;
+        public IF(IList<Signal> sigList, String name) 
         {
-            this.sigList = sigList;
+            this._sigList = sigList;
+            this._name = name;
+        }
+
+        public override bool Equals(object obj)
+        {
+            IF rsh;
+            bool flag = true;
+            rsh = obj as IF;
+            if(rsh == null)
+            {
+                return false;
+            }
+            if(this._sigList.Count != rsh._sigList.Count)
+            {
+                flag = false;
+            }
+            for(int i = 0; i < _sigList.Count; i++)
+            {
+                if(_sigList[i].Equals(rsh._sigList[i]) == false)
+                {
+                    flag = false;
+                    break;
+                }
+            }
+            return (_name == rsh._name) && flag;
+        }
+
+        public override String ToString()
+        {
+           String str = ""; 
+           str += String.Format("[IF name {0}]\n", _name);
+           foreach(var sig in _sigList)
+           {
+               str += sig.ToString();
+           }
+           return str;
+
         }
 
         /// <summary>
         /// dumpt to json file 
         /// </summary>
-        public void DumpJson()
+        public void DumpJson(JsonWriter writer)
         {
-            foreach(var sig in sigList)
+            writer.WriteStartObject();
+            writer.WritePropertyName("Name");
+            writer.WriteValue(_name);
+            writer.WritePropertyName("SigList");
+            writer.WriteStartArray();
+            foreach(var sig in _sigList)
             {
-                sig.DumpJson();
+                sig.DumpJson(writer);
             }
+            writer.WriteEndArray();
+            writer.WriteEndObject();
         }
 
         public void DumpXml()
@@ -42,12 +87,20 @@ namespace STU.SignalsChecker
     /// <summary>
     /// sv Interface Checker
     /// </summary>
-    class IFChecker: IChecker
+    public class IFChecker: IChecker
     {
         private IWorkbook wb;
         private ILogger log;
         private JsonWriter writer;
         private IList<IF> ifList;
+
+        public IList<IF> IfList
+        {
+            get
+            {
+                return this.ifList;
+            }
+        }
 
         public IFChecker(IWorkbook wb, ILogger log, JsonWriter writer)
         {
@@ -68,6 +121,11 @@ namespace STU.SignalsChecker
                     log.LogWarning("No Sheet in workbook");
                     continue;
                 }
+                if(tmpSheet.GetRow(0) == null)
+                {
+                    log.LogWarning("Ignore Empty Sheet");
+                    continue;
+                }
                 checker = new SignalsChecker(tmpSheet, log, writer);
                 if(checker.Check() == 1)
                 {
@@ -76,7 +134,7 @@ namespace STU.SignalsChecker
                 }
                 else
                 {
-                    ifList.Add(new IF((checker as SignalsChecker).SigList));
+                    ifList.Add(new IF((checker as SignalsChecker).SigList, tmpSheet.SheetName));
                 }
            }
            return 0; 
@@ -84,10 +142,12 @@ namespace STU.SignalsChecker
         
         private void DumpJson()
         {
+            writer.WriteStartArray();
             foreach(var If in ifList)
             {
-                If.DumpJson();
+                If.DumpJson(writer);
             }
+            writer.WriteEndArray();
         }
 
         private void DumpXml()

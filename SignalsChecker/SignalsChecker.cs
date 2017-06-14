@@ -12,6 +12,7 @@ using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
+using System.Diagnostics;
 
 namespace STU.SignalsChecker
 {
@@ -20,7 +21,7 @@ namespace STU.SignalsChecker
        public int start;
        public int end; 
     }
-     class Signal
+    public class Signal
     {
         enum Con_e {DEFAULT, CH_NAME, ONE, ZERO, EXPRESSION};
         enum IO_e {INPUT, OUTPUT}
@@ -30,45 +31,6 @@ namespace STU.SignalsChecker
         SignalWidth _width;
         Con_e _connect;
         String _misc; //for CH_NAME and EXPRESSION Con_e
-
-        public String Name
-        {
-            get
-            {
-                return _name;
-            }
-        }
-
-        public String Width
-        {
-            get
-            {
-                return String.Format("{0:d}", (_width.end+1));
-            }
-        }
-        public String InstanceDef
-        {
-            get
-            {
-                return _instanceDef;
-            }
-        }
-
-        public String IO
-        {
-            get
-            {
-                return _io.ToString();
-            }
-        }
-
-        public String Connection
-        {
-            get
-            {
-                return GenConnection();
-            }
-        }
 
         public Signal() {}
 
@@ -136,25 +98,32 @@ namespace STU.SignalsChecker
         private String JoinSignalWithWidth(SignalWidth width, String instanceDef, String name)
         {
             String ret;
-            ret = "{";
-            for(int i = 0; i < (width.end-width.start+1); i++)
+            if(width.end == 0 && width.start == 0)
             {
-                if((width.end-i == width.start) && (width.start == 0))//last one
-                {
-                    ret += String.Format("`{0:s}.{1:s}{2:d}", instanceDef, name, (width.end-i)); 
-                }
-                else
-                {
-                    ret += String.Format("`{0:s}.{1:s}{2:d},", instanceDef, name, (width.end-i)); 
-                }
+                ret = String.Format("`{0}.{1}", instanceDef, name);
+                return ret;
             }
-            if(width.start > 0)
+            else
             {
-                ret += String.Format("{0:d}'d0", width.start);
+                ret = "{";
+                for(int i = 0; i < (width.end-width.start+1); i++)
+                {
+                    if((width.end-i == width.start) && (width.start == 0))//last one
+                    {
+                        ret += String.Format("`{0:s}.{1:s}{2:d}", instanceDef, name, (width.end-i)); 
+                    }
+                    else
+                    {
+                        ret += String.Format("`{0:s}.{1:s}{2:d},", instanceDef, name, (width.end-i)); 
+                    }
+                }
+                if(width.start > 0)
+                {
+                    ret += String.Format("{0:d}'d0", width.start);
+                }
+                ret += "}";
+                return ret;
             }
-            ret += "};";
-            return ret;
-
         }
         /// <summary>
         ///this function generate the connection string according conncet filed
@@ -172,7 +141,7 @@ namespace STU.SignalsChecker
                     ret = JoinSignalWithWidth(_width, _instanceDef, _misc);
                     return ret;
                 case Con_e.ONE:
-                    ret = String.Format("'h{0:x}", Math.Pow(2, _width.end+1)-1);
+                    ret = String.Format("{0:d}'h{1:x}", _width.end+1, Math.Pow(2, _width.end+1)-1);
                     return ret;
                 case Con_e.ZERO:
                     ret = String.Format("'h0");
@@ -186,9 +155,43 @@ namespace STU.SignalsChecker
             return "";
         }
 
-        public void DumpJson()
+        public override bool Equals(object obj)
         {
+            Signal rsh;
 
+            rsh = obj as Signal;
+            if(rsh == null) // obj is not Signal object
+            {
+                return false;
+            }
+
+            return (this._name == rsh._name) &&
+                   (this._width.end == rsh._width.end) &&
+                   (this._width.start == rsh._width.start) &&
+                   (this._instanceDef == rsh._instanceDef) &&
+                   (this._io == rsh._io) &&
+                   (this._connect == rsh._connect);
+        }
+
+        public override String ToString()
+        {
+            return String.Format("Name: {0}, Instance: {1}, IO: {2}, width-start {3:d} -- end {4:d}, con: {5}", _name, _instanceDef, _io, _width.start, _width.end, _connect);
+        }
+
+        public void DumpJson(JsonWriter writer)
+        {
+            writer.WriteStartObject();
+            writer.WritePropertyName("Name");
+            writer.WriteValue(this._name);
+            writer.WritePropertyName("IO");
+            writer.WriteValue(this._io.ToString());
+            writer.WritePropertyName("InstanceDef");
+            writer.WriteValue(this._instanceDef);
+            writer.WritePropertyName("Width");
+            writer.WriteValue(String.Format("{0:d}", (this._width.end+1)));
+            writer.WritePropertyName("Connection");
+            writer.WriteValue(this.JoinSignalWithWidth(_width, _instanceDef, _name));
+            writer.WriteEndObject();
         }
 
         public void DumpXml()
@@ -198,7 +201,7 @@ namespace STU.SignalsChecker
     }
 
 
-    class SignalsChecker: IChecker
+    public class SignalsChecker: IChecker
     {
         private ISheet sheet;
         private ILogger log;
@@ -227,10 +230,10 @@ namespace STU.SignalsChecker
         /// <returns>0 is ok</returns>
         public int TitleLineCheck(IRow titileRow)
         {
-            if(titileRow.LastCellNum < 3)
+            if(titileRow.LastCellNum < 5)
             {
                 log.LogError("Table column number error");
-                log.LogError("there are three columns: SignalName|instance|IO|Connection");
+                log.LogError("there are Five columns: SignalName|width|Instance|IO|Connection");
                 return 1;
             }
             foreach(var cell in titileRow.Cells)
@@ -240,29 +243,36 @@ namespace STU.SignalsChecker
                     case 0:
                         if(cell.CellType != CellType.String && cell.StringCellValue != "SignalName")
                         {
-                           log.LogError("The first column of the title line must be SignalName");
+                           log.LogError("The columnA of the title line must be SignalName");
                            return 1; 
                         }
                         break;
                     case 1:
+                        if(cell.CellType != CellType.String && cell.StringCellValue != "Width")
+                        {
+                            log.LogError("The columnB of the title line must be Width");
+                            return 1;
+                        }
+                        break;
+                    case 2:
                         if(cell.CellType != CellType.String && cell.StringCellValue != "Instance")
                         {
-                            log.LogError("The second column of the title line must be Instance");
+                            log.LogError("The columnC of the title line must be Instance");
                             return 1;
                         }
                         break;
 
-                    case 2:
+                    case 3:
                         if(cell.CellType != CellType.String && cell.StringCellValue != "IO")
                         {
-                            log.LogError("The second column of the title line must be IO");
+                            log.LogError("The columnD of the title line must be IO");
                             return 1;
                         }
                         break;
-                    case 3:
+                    case 4:
                         if(cell.CellType != CellType.String && cell.StringCellValue != "Conncetion")
                         {
-                            log.LogError("The third column of the title line must be Conncetion");
+                            log.LogError("The columnE of the title line must be Conncetion");
                             return 1;
                         }
                         break;
@@ -270,7 +280,7 @@ namespace STU.SignalsChecker
                         if(cell.CellType != CellType.Blank)
                         {
                             log.LogError("Table column number error");
-                            log.LogError("there are three columns: SignalName|IO|Connection");
+                            log.LogError("there are Five columns: SignalName|Width|Instance|IO|Connection");
                             return 1;
                         }
                         break;
@@ -310,61 +320,89 @@ namespace STU.SignalsChecker
             int start = 0, end = 0;
             ICell cell;
 
-            cell = row.GetCell(0);
-            if(SignalNameCellCheck(cell, ref name, ref end, ref start) == 1)
+            cell = row.GetCell(0, MissingCellPolicy.CREATE_NULL_AS_BLANK);
+            if(cell.StringCellValue == "")
             {
-                log.LogError("SignalName Cell Format Error");
+                log.LogError(String.Format("Row {0}, ColumnA SignalName Cell Format Error", cell.RowIndex));
                 return null;
             }
-            cell = row.GetCell(1);
-            insRef = cell.CellType == CellType.Blank ? "INS" : cell.StringCellValue;
+            name = cell.StringCellValue;
+            cell = row.GetCell(1, MissingCellPolicy.CREATE_NULL_AS_BLANK);
+            if(WidthCellCheck(cell, ref end, ref start) == 1)
+            {
+                log.LogError(String.Format("Row {0}, ColumnB Width Cell Format Error", cell.RowIndex));
+                return null;
+            }
             cell = row.GetCell(2);
+            insRef = cell.CellType == CellType.Blank ? "INS" : cell.StringCellValue;
+            cell = row.GetCell(3, MissingCellPolicy.CREATE_NULL_AS_BLANK);
             io = cell.CellType == CellType.Blank ? "I": cell.StringCellValue;
-            cell = row.GetCell(3);
+            cell = row.GetCell(4, MissingCellPolicy.CREATE_NULL_AS_BLANK);
             if(ConncetionCellCheck(cell, ref con, ref misc) == 1)
             {
-                log.LogError("Connection Cell Format Error");
+                log.LogError(String.Format("Row {0}, ColumnE connect Cell Format Error", cell.RowIndex));
                 return null;
             }
             return new Signal(name, insRef, io, start, end, con, misc);
         }
 
         /// <summary>
-        /// check the signal name cell content
-        /// the content contain the the signal name and signal width 
-        /// the type is signalnameEndnum~startnum, example is address35~4
+        /// this function is used check width cell of the signal 
+        /// the cell format is end:sart, example: 39:2
+        /// single bit signal, this cell can be 0:0, NA or Empty
         /// </summary>
-        /// <param name="cell"></param>
-        /// <param name="name">signal name</param>
-        /// <param name="width_end">signal width </param>
-        /// <param name="width_start">signal width</param>
-        /// <returns>0 is ok</returns>
-        private int SignalNameCellCheck(ICell cell, ref String name, ref int width_end, ref int width_start)
+        /// <param name="cell"> the width cell</param>
+        /// <param name="width_end">width_end value</param>
+        /// <param name="width_start">width_start value</param>
+        /// <returns></returns>
+        private int WidthCellCheck(ICell cell, ref int width_end, ref int width_start)
         {
-            String content = cell.StringCellValue;
-            Regex re = new Regex(@"(\w+)((\d{1,2})~(\d{1,2})?");
+            Regex widthRe = new Regex(@"(\d{1,2})~(\d{1,2})");
 
-            Match m = re.Match(content);
-            if(!m.Success)
+            if(cell.CellType == CellType.Blank)
             {
-               log.LogError(String.Format("Row {0:d} Signal Name cell content format Error", cell.Row.RowNum)); 
-               log.LogError("Signal Name content format is:"); 
-               log.LogError("single bit signal only need signal name"); 
-               log.LogError("multi-bits signal need signamewidth_end~width_start, just like address35~4"); 
-               return 1;
+                width_end = 0;
+                width_start = 0;
+                return 0;
+            }
+            else if(cell.StringCellValue == String.Empty)
+            {
+                width_end = 0;
+                width_start = 0;
+                return 0;
+            }
+            else if(cell.StringCellValue == "NA")
+            {
+                width_end = 0;
+                width_start = 0;
+                return 0;
             }
             else
-            {
-                name = m.Groups[0].Captures[0].Value;
-                if(m.Groups.Count == 4) 
+            { 
+                Match widthm = widthRe.Match(cell.StringCellValue);
+                if(!widthm.Success)
                 {
-                    width_end = Convert.ToInt32(m.Groups[2].Captures[0].Value);
-                    width_start = Convert.ToInt32(m.Groups[3].Captures[0].Value);
+                   log.LogError(String.Format("Row {0:d} Width cell content format Error\n", cell.Row.RowNum)); 
+                   log.LogDebug("Width cell format is:\nsingle-bit signal this cell can be 0~0, NA, or Empty\nmulti-bits signal need width_end:width_start, just like 35:4"); 
+                   return 1;
+                }
+                if(widthm.Groups[1].Captures.Count > 0)
+                {
+                    width_end = Convert.ToInt32(widthm.Groups[1].Captures[0].Value);
+                }
+                else
+                {
+                    log.LogError("multi-bits signal need width_end:width_start, 35~4"); 
+                    return 1;
+                }
+                if(widthm.Groups[2].Captures.Count > 0)
+                {
+                    width_start = Convert.ToInt32(widthm.Groups[2].Captures[0].Value);
                 }
                 return 0;
             }
-
         }
+
 
         /// <summary>
         /// check the connection cell content
@@ -380,8 +418,13 @@ namespace STU.SignalsChecker
         /// <returns>0 is ok</returns>
         private int ConncetionCellCheck(ICell cell, ref String con, ref String misc)
         {
-            String []sArray = cell.StringCellValue.Split('%');
+            String []sArray;
 
+            if(cell.CellType == CellType.Blank)
+            {
+                sArray = new String[1]{""};
+            }
+            sArray = cell.StringCellValue.Split('%');
             switch(sArray[0])
             {
                 case "":
@@ -391,7 +434,7 @@ namespace STU.SignalsChecker
                     if(sArray.Length != 1)
                     {
                         log.LogError("Connection Type NA or ONE or ZERO don't need msic parameter");
-                        log.LogError("Connection cell be Type");
+                        log.LogError("Connection cell be Type%");
                         return 1;
                     }
                     con = sArray[0];
@@ -420,14 +463,6 @@ namespace STU.SignalsChecker
         /// <returns>return 0 is ok</returns>
         public int Check()
         {
-            String sigName;
-            String insRef;
-            String io;
-            int width_start, width_end;
-            String con;
-            String misc;
-
-
             //check title line
             if(TitleLineCheck(sheet.GetRow(0)) != 0)
             {
@@ -444,7 +479,7 @@ namespace STU.SignalsChecker
                }
                if(EmptyLineCheck(tmpRow)) 
                {
-                    log.LogInformation("Ignore empty row");
+                    log.LogWarning("Ignore empty row");
                }
                else
                {
@@ -460,8 +495,14 @@ namespace STU.SignalsChecker
 
         private void DumpJson()
         {
-
+            writer.WriteStartArray();
+            foreach(var sig in sigList)
+            {
+                sig.DumpJson(writer);
+            }
+            writer.WriteEndArray();
         }
+
         private void DumpXml()
         {
 
